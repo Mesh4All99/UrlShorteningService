@@ -25,7 +25,7 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 // url shortening endpoints
-app.MapPost("urlShorten", async (urlshortenRequest url,RandomizedCharachters helper,ApplicationDbContext context, HttpContext http) =>
+app.MapPost("shorturl", async (urlshortenRequest url,RandomizedCharachters helper,ApplicationDbContext context, HttpContext http) =>
 {
     if(url.Alias != null)
     {
