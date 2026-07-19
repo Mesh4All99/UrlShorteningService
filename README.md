@@ -5,7 +5,7 @@
 
 <!-- Typing Animation -->
 <a href="#">
-  <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=22&pause=1000&color=8B5CF6&center=true&vCenter=true&random=false&width=600&lines=⚡+High-Performance+URL+Shortener;🔒+Custom+Aliases+Support;📊+Built-in+Click+Tracking;🚀+Powered+by+.NET+10+Minimal+APIs" alt="Typing SVG" />
+  <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=22&pause=1000&color=8B5CF6&center=true&vCenter=true&random=false&width=600&lines=⚡+High-Performance+URL+Shortener;🔒+Custom+Aliases+Support;📊+Built-in+Click+Tracking;⚡+Redis+Cache-Aside+Pattern;🚀+Powered+by+.NET+10+Minimal+APIs" alt="Typing SVG" />
 </a>
 
 <br/>
@@ -17,6 +17,7 @@
 [![C#](https://img.shields.io/badge/C%23-239120?style=for-the-badge&logo=csharp&logoColor=white)](https://docs.microsoft.com/dotnet/csharp/)
 
 <!-- Badges Row 2 -->
+[![Redis](https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white)](https://redis.io/)
 [![License](https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge&logo=opensourceinitiative&logoColor=white)](#-license)
 [![Minimal APIs](https://img.shields.io/badge/Minimal_APIs-ff6b6b?style=for-the-badge&logo=fastapi&logoColor=white)](#)
 [![Scalar Docs](https://img.shields.io/badge/Scalar_Docs-6366f1?style=for-the-badge&logo=swagger&logoColor=white)](#)
@@ -26,7 +27,7 @@
 <!-- Short Description -->
 <p>
   <strong>🌐 A sleek, high-performance RESTful API for URL shortening</strong><br/>
-  <sub>Built with modern .NET 10 Minimal APIs • PostgreSQL • Entity Framework Core</sub>
+  <sub>Built with modern .NET 10 Minimal APIs • PostgreSQL • Entity Framework Core • Redis Cache</sub>
 </p>
 
 <img src="https://user-images.githubusercontent.com/73097560/115834477-dbab4500-a447-11eb-908a-139a6edaec5c.gif" width="100%">
@@ -57,6 +58,7 @@
 |:---:|:---|
 | 🚀 | **Minimal APIs** — Lightweight, high-performance endpoints |
 | 🗄️ | **PostgreSQL** — Robust, scalable data storage |
+| ⚡ | **Redis Cache** — Cache-aside pattern with 5-minute TTL for fast redirects |
 | 📝 | **Scalar Docs** — Interactive API documentation at `/docs` |
 | 🔄 | **Auto Redirect** — Seamless HTTP 302 redirection |
 
@@ -72,14 +74,19 @@
 graph LR
     A["🌐 Client"] -->|POST /shorturl| B["⚡ Minimal API"]
     A -->|GET /:alias| B
-    B -->|Validate & Process| C["🔧 Services"]
-    C -->|EF Core| D["🗄️ PostgreSQL"]
+    B -->|"1. Check cache"| E["⚡ Redis Cache"]
+    E -->|"Cache HIT → return URL"| B
+    E -->|"Cache MISS"| C["🔧 Services"]
+    C -->|"2. EF Core query"| D["🗄️ PostgreSQL"]
+    D -->|"3. URL found → store in cache"| E
+    C --> B
     B -->|302 Redirect| A
-    
+
     style A fill:#6366f1,stroke:#4f46e5,color:#fff
     style B fill:#8b5cf6,stroke:#7c3aed,color:#fff
     style C fill:#ec4899,stroke:#db2777,color:#fff
     style D fill:#06b6d4,stroke:#0891b2,color:#fff
+    style E fill:#DC382D,stroke:#b02020,color:#fff
 ```
 
 <br/>
@@ -96,6 +103,8 @@ graph LR
 | **ORM** | Entity Framework Core 10 | ![EF Core](https://img.shields.io/badge/EF_Core-512BD4?style=flat-square&logo=dotnet&logoColor=white) |
 | **Database** | PostgreSQL | ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat-square&logo=postgresql&logoColor=white) |
 | **DB Provider** | Npgsql | ![Npgsql](https://img.shields.io/badge/Npgsql-336791?style=flat-square&logo=postgresql&logoColor=white) |
+| **Cache** | Redis (StackExchange.Redis) | ![Redis](https://img.shields.io/badge/Redis-DC382D?style=flat-square&logo=redis&logoColor=white) |
+| **Cache Abstraction** | `IDistributedCache` + `IRedisCache` | ![.NET](https://img.shields.io/badge/IDistributedCache-512BD4?style=flat-square&logo=dotnet&logoColor=white) |
 | **API Docs** | Scalar | ![Scalar](https://img.shields.io/badge/Scalar-6366f1?style=flat-square&logo=swagger&logoColor=white) |
 
 </div>
@@ -106,6 +115,10 @@ graph LR
 
 ```
 🗂️ ShorterUrls/
+│
+├── 📂 Cache/                 # Redis Caching Layer
+│   ├── IRedisCache.cs        # Cache abstraction (GetData<T>, SetData<T>)
+│   └── RedisCache.cs         # IDistributedCache implementation (5-min TTL)
 │
 ├── 📂 Data/                  # DbContext & Database Configuration
 │   └── ApplicationDbContext.cs
@@ -142,6 +155,7 @@ graph LR
 |:---:|:---:|:---:|
 | ![.NET](https://img.shields.io/badge/.NET_SDK-512BD4?style=flat-square&logo=dotnet&logoColor=white) | **10.0+** | [Download](https://dotnet.microsoft.com/download) |
 | ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat-square&logo=postgresql&logoColor=white) | **14.0+** | [Download](https://www.postgresql.org/download/) |
+| ![Redis](https://img.shields.io/badge/Redis-DC382D?style=flat-square&logo=redis&logoColor=white) | **6.0+** | [Download](https://redis.io/download/) |
 
 </div>
 
@@ -158,17 +172,20 @@ cd UrlShorteningService
 </details>
 
 <details>
-<summary><b>🗄️ Step 2 — Configure Database Connection</b></summary>
+<summary><b>🗄️ Step 2 — Configure Database & Redis Connection</b></summary>
 
-Update the connection string in `appsettings.json`:
+Update the connection strings in `appsettings.json`:
 
 ```json
 {
   "ConnectionStrings": {
-    "Default": "Host=localhost; Port=5432; Database=UrlShorterDb; Username=postgres; Password=YOUR_PASSWORD;"
+    "Default": "Host=localhost; Port=5432; Database=UrlShorterDb; Username=postgres; Password=YOUR_PASSWORD;",
+    "Redis": "localhost:6379"
   }
 }
 ```
+
+> 💡 **Tip:** Make sure Redis is running before starting the application. The default port is `6379`.
 
 </details>
 
@@ -259,7 +276,7 @@ GET /{alias}
 > **Response:** `302 Found` — Redirects to the original long URL & increments click counter
 
 > [!TIP]
-> Each redirect automatically tracks clicks, enabling basic analytics for your shortened URLs.
+> Redirects use a **cache-aside pattern**: the alias is looked up in Redis first (⚡ fast path). On a cache miss, the URL is fetched from PostgreSQL, stored in Redis with a **5-minute TTL**, then the redirect is served. Click counts are incremented on every request.
 
 <br/>
 
