@@ -1,6 +1,6 @@
-using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
+using ShorterUrls.Cache;
 using ShorterUrls.Data;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -8,10 +8,15 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddOpenApi();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddScoped<RandomizedCharachters>();
+builder.Services.AddScoped<IRedisCache, RedisCache>();
 
 builder.Services.AddDbContext<ApplicationDbContext>(opt =>
 {
     opt.UseNpgsql(builder.Configuration.GetConnectionString("Default"));
+});
+builder.Services.AddStackExchangeRedisCache(opt =>
+{
+   opt.Configuration = builder.Configuration.GetConnectionString("Redis"); 
 });
 
 var app = builder.Build();
@@ -33,10 +38,12 @@ app.MapPost("shorturl", async (urlshortenRequest url,RandomizedCharachters helpe
         {
            return Results.BadRequest("الرابط المعطى غير صحيح"); 
         }
+
         if(await context.Urls.AnyAsync(x => x.Id == url.Alias))
         {
             return Results.BadRequest("هذا الاختصار مرتبط مسبقاً");
         }
+
         var validUrlObject = new Url
         {
         Id = url.Alias,
@@ -75,13 +82,24 @@ app.MapPost("shorturl", async (urlshortenRequest url,RandomizedCharachters helpe
     });
 });
 
-app.MapGet("{alias}", async (string alias, ApplicationDbContext context, HttpContext http) =>
+app.MapGet("{alias}", async (string alias, ApplicationDbContext context, HttpContext http, IRedisCache cache) =>
 {
-    var data = await context.Urls.FindAsync(alias);
+    var data = cache.GetData<Url>(alias);
+    if(data != null)
+    {
+        data.ClickCount++;
+        await context.SaveChangesAsync();
+        return Results.Redirect(data.LongUrl);
+    }
+
+    data = await context.Urls.FindAsync(alias);
     if (data == null)
     {
         return Results.NotFound("لم يتم إجاد المعرف الخاص بالرابط");
     }
+
+    cache.SetData<Url>(alias,data);
+
     data.ClickCount++;
     await context.SaveChangesAsync();
     return Results.Redirect(data.LongUrl);
